@@ -1,34 +1,80 @@
 <template>
-  <div class="container">
-    <h2> {{ lobbyID }}</h2>
-    <div class="b">
+  <b-container class="full">
+    <h2 class="text-center"> {{ lobbyID }}</h2>
+    <div>
       <span>
         waiting for {{ lobbyInfo.countPlayers - users.length }} players
       </span>
     </div>
     <div class="b">
-      <span>users</span>
-      <ul>
-        <li v-for="user in users">
-          {{ user }}
-        </li>
-      </ul>
+      <span> Готовятся к игре: </span>
+      <b-row>
+        <b-col v-for="user in users">
+          <b-card
+            bg-variant="light"
+            :header="user"
+            class="text-center"
+            text-variant="dark"
+          >
+            <span class="success" v-if="ready.includes(user)">
+              готов
+            </span>
+            <span class="warning" v-else>
+              не готов
+            </span>
+
+          </b-card>
+        </b-col>
+      </b-row>
+      <br >
+      <b-row>
+        <b-col md="3" offset-md="4">
+          <v-card>
+            <v-card-title primary-title>
+              {{ userID }}
+            </v-card-title>
+            <v-card-actions>
+              <v-btn
+                v-if="ready.includes(userID)"
+                color="warning"
+                @click="userUnreadyToPlay"
+              >
+                я не готов
+              </v-btn>
+
+              <v-btn
+                v-else
+                @click="userReadyToPlay"
+                color="success">
+                я готов
+              </v-btn>
+            </v-card-actions>
+          </v-card>
+        </b-col>
+      </b-row>
     </div>
-    <div class="b chat">
-      <h4>chat</h4>
-        <table>
-          <tr v-for="message in messages">
-            <td>{{ message.username }}</td>
-            <td>{{ message.text }}</td>
-            <td>{{ message.date }}</td>
-          </tr>
-        </table>
-      <input type="text" v-model="messageText">
-      <button @click="sendMessage">
-        send
-      </button>
-    </div>
-  </div>
+    <br>
+    <b-card
+      bg-variant="info"
+      header="chat"
+      class="text-center"
+      text-variant="dark"
+    >
+      <b-container>
+        <b-row class="border-dark" v-for="message in messages">
+          <b-col>{{ message.username }}</b-col>
+          <b-col>{{ message.text }}</b-col>
+          <b-col>{{ message.date }}</b-col>
+        </b-row>
+        <br>
+        <input type="text" v-model="messageText">
+        <button @click="sendMessage">
+          send
+        </button>
+      </b-container>
+    </b-card>
+
+  </b-container>
 </template>
 
 <script>
@@ -41,7 +87,9 @@
         messageText: '',
         lobbyID: '',
         messages: [],
-        users: []
+        users: [],
+        ready: [],
+        userID: ''
       }
     },
 
@@ -66,34 +114,100 @@
 
       addUserToLobby(userInfo){
         this.users.push(userInfo.UserID);  // добавляю челика в список
-        this.messages.push(`${userInfo.UserID} присоединился в игре`); //  служебное сообщение в чат
+        const messageObj = {
+          lobbyID: this.lobbyID,
+          username: 'GEO',
+          text: `${userInfo.UserID} присоединился в игре`,
+          date: new Date()
+        };
+        this.messages.push(messageObj); //  служебное сообщение в чат
       },
 
       leaveSocket(id){
         if(this.users.includes(id)) {
           this.users.splice(this.users.indexOf(id), 1);
-          this.messages.push(`${id} ливанул`);
+          const messageObj = {
+            lobbyID: this.lobbyID,
+            username: 'GEO',
+            text: `${id} покинул игру`,
+            date: new Date()
+          };
+          this.messages.push(messageObj);
         }
         // сразу же идет отправка чтобы открылась комната
         this.$socket.emit('showRoom', this.lobbyID);
       },
 
+      initialReady(readyList){
+        this.ready = readyList;
+      },
+
+      userReady(userID){
+        this.ready.push(userID);
+
+        const allReady = this.ready.length === this.users.length;
+        if(allReady){
+          console.log('pognale');
+          this.$socket.emit('tryToStart', {
+            lobbyID: this.lobbyID,
+            countPlayers: this.lobbyInfo.countPlayers,
+            allReady: allReady
+          });
+        }
+
+      },
+
+      userUnready(userID){
+        this.ready.splice(this.ready.indexOf(userID), 1);
+      },
+
+      setStartGameTimer(){
+        console.log('pognale');
+        this.$router.push({
+          name: 'timer',
+          params: {
+            lobbyID: this.lobbyID,
+            lobbyInfo: {
+              ...this.lobbyInfo,
+              userID: this.userID
+            }
+          }
+        });
+
+      }
+
     },
     mounted () {
       //  забор инфы о лобби из параметров
       this.lobbyID = this.$store.state.route.params.lobbyID;
-      console.log(this.lobbyID);
+      this.userID = this.$socket.id;
 
       this.lobbyInfo = this.$store.state.route.params.lobbyInfo;
-      console.log(this.lobbyInfo);
+
 
       // запрос на историю сообщений
       this.$socket.emit('getHistoryMessages', this.lobbyID);
-
+      // запрос на людей
       this.$socket.emit('getCountPeopleInLobby', this.lobbyID);  // запрос на игроков
+      // запрос на то кто готов
+      this.$socket.emit('getInitialReady', this.lobbyID);
+
     },
 
     methods: {
+
+      userReadyToPlay(){
+        this.$socket.emit('readyToPLay', {
+          lobbyID: this.lobbyID,
+          userID: this.userID
+        });
+      },
+      userUnreadyToPlay(){
+        this.$socket.emit('unreadyToPLay', {
+          lobbyID: this.lobbyID,
+          userID: this.userID
+        });
+      },
       sendMessage () {
         this.$socket.emit('sendMessageToLobby', {
           lobbyID: this.lobbyID,
@@ -107,22 +221,9 @@
 </script>
 
 <style scoped>
-  .container {
-    position: absolute;
-    top: 50vh;
-    left: 0;
-
-    overflow: hidden;
+  .full {
+    height: 100vh;
   }
 
-  .b {
-    background-color: #D6D6D6;
-    margin: 0.5rem;
-    font-size: 1rem;
-    border: 1px solid grey;
-    border-radius: 1rem;
-    padding: 3rem;
-    width: 40vw;
-    float: left;
-  }
+
 </style>

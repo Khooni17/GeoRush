@@ -1,15 +1,24 @@
 <template>
-  <div>
-    <create-game />
-    <div class="b lobby__list">
-      <span>LOBBIES :</span>
-      <div style="margin: 3rem; background-color: aqua; border-radius: 1rem" v-for="lobby in freeLobbies">
-        <lobby-preview
-          :lobbyID="lobby.lobbyID"
-        ></lobby-preview>
-      </div>
-    </div>
-  </div>
+      <b-row>
+        <b-col>
+          <create-game />
+        </b-col>
+      <b-col>
+        <h4>
+          <small>LOBBIES : </small>
+        </h4>
+
+          <b-row v-for="lobby in freeLobbies">
+            <lobby-preview
+              :lobbyInfo="lobby"
+              :lobbyID="lobby.lobbyID"
+              :players="lobby.players"
+            ></lobby-preview>
+          </b-row>
+
+
+      </b-col>
+    </b-row>
 </template>
 
 <script>
@@ -23,7 +32,6 @@
       return {
         addedUser : true,
         leavedUser: true,
-
         nameLobby: '',
         freeLobbies: [],
         messages: []
@@ -31,17 +39,41 @@
     },
 
     sockets: {
+      // приходит список всех лобби не начавшихся уже с подключившимися игроками
       createdLobbies(lobbies){
         this.freeLobbies = lobbies;
+
       },
 
       lobbyCreated(info){
-        this.freeLobbies.push(info.lobbyID);  /// добавляю превью сюда чтобы сокет сработал который в превью
+        this.freeLobbies.push(info);
+        //console.log(this.freeLobbies);
+        /// добавляю превью сюда чтобы сокет сработал который в превью
         this.$socket.emit('connectLobby', info);
       },
 
-      newLobby(info){
-        this.freeLobbies.push(info.lobbyID);
+      newLobby (info) {
+        this.freeLobbies.push(info);
+        //console.log(this.freeLobbies);
+      },
+
+      // добавление челика в ревью
+      addUserToReviewLobby (userInfo) {
+        this.freeLobbies.forEach( (lobby) => {
+          if(lobby.lobbyID === userInfo.lobbyID){
+            lobby.players.push(userInfo.UserID);
+            //console.log(lobby);
+          }
+        });
+      },
+
+      // удаление челика из ревью
+      leaveSocket (id) {
+        this.freeLobbies.forEach( (lobby) => {
+          if( lobby.players.includes(id) ){
+            lobby.players.splice(lobby.players.indexOf(id), 1);
+          }
+        })
       },
 
       // идет после запроса на коннект если комната заполнена
@@ -49,26 +81,44 @@
         console.log('комната заполнена');
       },
 
-      // показ скрытие ревью
-      hideRoom(lobbyInfo) {
-        const name = lobbyInfo.lobbyName;
-        this.freeLobbies.splice(this.freeLobbies.indexOf(name), 1);
+      // скрытие ревью
+      hideRoom(lobbyID) {
+        this.freeLobbies.forEach( (lobby, i) => {
+          if(lobby.lobbyID === lobbyID){
+            this.freeLobbies.splice(i, 1);
+          }
+        });
       },
 
-      showingRoom(lobbyInfo) {
-        if (!this.freeLobbies.includes(lobbyInfo)) {
-          this.freeLobbies.push(lobbyInfo);
-          console.log('work');
+      //  открытие ревью
+      showingRoom (lobbyID) {
+        console.log('showingRoom');
+        let needToPush = true;
+        this.freeLobbies.forEach((lobby) => {
+          if (lobby.lobbyID === lobbyID) {
+            needToPush = false;
+          }
+        });
+        if (needToPush) {
+          this.$socket.emit('getLobbyByID', lobbyID);
         }
-        else {
-          console.log('ne');
-        }
+      },
+      lobbyByID( lobbyInfo ) {
+        this.freeLobbies.push(lobbyInfo);
+        this.$socket.emit('getCountPeopleInLobbyToListing', lobbyInfo.lobbyID);
+      },
+      CountPeopleInLobbyToListing(playersInfo){
+        this.freeLobbies.forEach( (lobby) => {
+          if(lobby.lobbyID === playersInfo.lobbyID){
+            lobby.players = playersInfo.players;
+          }
+        });
       }
 
     },
 
     mounted(){
-      this.$socket.emit('getCreatedLobbies')
+      this.$socket.emit('getCreatedLobbies');
     },
     components: {
       lobbyPreview,
@@ -78,15 +128,7 @@
 </script>
 
 <style>
-
-  .b {
-    background-color: #D6D6D6;
-    margin: 0.5rem;
-    font-size: 1rem;
-    border: 1px solid grey;
-    border-radius: 1rem;
-    padding: 3rem;
-    width: 40vw;
-    float: left;
+  h4 {
+    text-align: center;
   }
 </style>
