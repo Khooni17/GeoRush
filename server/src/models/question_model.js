@@ -10,6 +10,9 @@ const questionSchema = new Schema({
   },
   answer: {
     type: String
+  },
+  alreadyAnswered: {
+    type: Array
   }
 }, {
   versionKey: false,

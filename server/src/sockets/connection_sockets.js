@@ -1,6 +1,7 @@
 const messageModel = require('../models/message');
 const LobbyModel = require('../models/lobby');
 const questionModel = require('../models/question_model');
+const https = require('https');
 
 const _ = require('lodash');
 
@@ -204,24 +205,212 @@ module.exports = (io, socket) => {
 
   });
 
-  socket.on('connectedToGame', (gameInfo) => {
 
-    console.log('questionModel');
-    // игра
-    questionModel.create({
-      id: 1,
-      question: '1 question',
-      answer: '1 answer'
-    }, () => {
 
-    })
+  socket.on('getQuestion', (gameInfo) => {
+    console.log(1);
+    const places = ['restaurants', 'parks', 'monuments', 'gardens', 'stadiums', 'constructions', 'museums'];
+    const countries = ['Russia',
+      'Australia',
+      'Austria',
+      'Azerbaijan',
+      'Anguilla',
+      'Argentina',
+      'Armenia',
+      'Arulco',
+      'Belarus',
+      'Belize',
+      'Belgium',
+      'Bermuda',
+      'Bulgaria',
+      'Brazil',
+      'Great Britain',
+      'Hungary',
+      'Vietnam',
+      'Haiti',
+      'Guadeloupe',
+      'Germany',
+      'Holland',
+      'Honduras',
+      'Hong+Kong',
+      'Greece',
+      'Georgia',
+      'Denmark',
+      'Dominican+Republic',
+      'Egypt',
+      'Israel',
+      'India',
+      'Indonesia',
+      'Jordan',
+      'Iraq',
+      'Iran',
+      'Ireland',
+      'Spain',
+      'Italy',
+      'Kazakhstan',
+      'Cameroon',
+      'Canada',
+      'Caribbean',
+      'Cyprus',
+      'Kirghizstan',
+      'China',
+      'Korea',
+      'Costa+Rica',
+      'Cuba',
+      'Kuwait',
+      'Latvia',
+      'Lebanon',
+      'Lebanon',
+      'Libya',
+      'Lithuania',
+      'Luxembourg',
+      'Macedonia',
+      'Malaysia',
+      'Malta',
+      'Mexico',
+      'Mozambique',
+      'Moldova',
+      'Monaco',
+      'Mongolia',
+      'Morocco',
+      'Netherlands',
+      'New+Zealand',
+      'Norway',
+      'Isle+Of+Man',
+      'Pakistan',
+      'Peru',
+      'Poland',
+      'Portugal',
+      'Reunion',
+      'Romania',
+      'USA',
+      'El+Salvador',
+      'Singapore',
+      'Syria',
+      'Slovakia',
+      'Slovenia',
+      'Suriname',
+      'Tajikistan',
+      'Taiwan',
+      'Thailand',
+      'Tunisia',
+      'Turkmenistan',
+      'Turkmenistan',
+      'Turks+and+Caicos',
+      'Turkey',
+      'Uganda',
+      'Uzbekistan',
+      'Ukraine',
+      'Finland',
+      'France',
+      'Croatia',
+      'Czech',
+      'Chile',
+      'Switzerland',
+      'Sweden',
+      'Ecuador',
+      'Estonia',
+      'South+Africa',
+      'Yugoslavia',
+      'South+Korea',
+      'Jamaica',
+      'Japan'];
+    const queryString = `${places[Math.floor(Math.random() * places.length)]}+in+${countries[Math.floor(Math.random() * countries.length)]}`;
+    console.log(queryString);
 
+    const options = {
+      host: 'maps.googleapis.com',
+      path: `/maps/api/place/textsearch/json?query=${queryString}&key=AIzaSyDOSq_kn0L-hgthgdNbywIpAaHcyZo51RM`
+    };
+
+    const req = https.get(options, function(res) {
+      console.log('STATUS: ' + res.statusCode);
+      //console.log('HEADERS: ' + JSON.stringify(res.headers));
+
+      let bodyChunks = [];
+      res.on('data', (chunk)  => {
+
+        // поставить условие наличие каритинки
+        bodyChunks.push(chunk);
+      }).on('end', () => {
+        let body = Buffer.concat(bodyChunks);
+        const parsedBody = JSON.parse(body);
+        const results = parsedBody.results;
+        const randomResult = results[Math.floor(Math.random() * results.length)];
+        console.log('randomResult ', randomResult);
+        const photo = randomResult.photos[0];
+        const photoReference = photo.photo_reference;
+
+        https.get({
+          host : 'maps.googleapis.com',
+          path: `/maps/api/place/photo?maxwidth=540&photoreference=${photoReference}&key=AIzaSyDOSq_kn0L-hgthgdNbywIpAaHcyZo51RM`
+        }, (res) => {
+
+          let imageChunks = '';
+          res.on('data', (chunk)  => {
+            imageChunks += chunk;
+          }).on('end', () => {
+            let regexp = /"https.*"/;
+            const photoURL = imageChunks.match(regexp)[0].split('"')[1];
+            console.log(photoURL);
+            socket.emit('question', photoURL);
+          });
+        });
+
+        //console.log(photoReference);
+      });
+    });
   });
 
 
+  /*
+    questionModel.count()
+      .then( (count) => {
+        const randNum = Math.floor(Math.random() * count);
+        questionModel.findOne({id : randNum})
+          .then( (qstn) => {
+            socket.emit('question', {
+              ...qstn,
+              from: 'question'
+            });
+          })
+          .catch(() => {})
+      });
+*/
+
+
+  socket.on('answer', (gameInfo) => {
+
+   // сохранение, что этот челик отвечал
+   questionModel.findOne({id: gameInfo.question.id})
+     .then( (question) => {
+       question.alreadyAnswered.push(gameInfo.userID);
+       question.save()
+         .then( () => {})
+     })
+     .catch( () => {});
+
+
+   // оценка ответа
+
+    // другим емит, количество баллов
 
 
 
+    // отправка нового вопроса
+    questionModel.count()
+      .then( (count) => {
+        const randNum = Math.floor(Math.random() * count);
+        questionModel.findOne({id : randNum})
+          .then( (qstn) => {
+            socket.emit('question', {
+              ...qstn,
+              from: 'answer'
+            });
+          })
+          .catch(() => {})
+      });
+  });
 
 
 

@@ -169,7 +169,8 @@
             lobbyID: this.lobbyID,
             lobbyInfo: {
               ...this.lobbyInfo,
-              userID: this.userID
+              userID: this.userID,
+              users: this.users
             }
           }
         });
