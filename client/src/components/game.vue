@@ -1,7 +1,14 @@
 <template >
     <div>
-      <div v-if="showPick" class="question">
+      <!--<div v-if="showPick" class="question">
         <img v-bind:src="question" >
+      </div>-->
+      <div class="map"
+        v-if="showMap"
+      >
+        <google-map
+          @marker="changePositionMarker"
+        ></google-map>
       </div>
       <div class="users">
         <h3>users</h3>
@@ -21,6 +28,7 @@
           :value="valueTimer"
         >
           <h3>{{ seconds }}</h3>
+
         </v-progress-circular>
 
 
@@ -38,11 +46,14 @@
 </template >
 
 <script >
+import  googleMap from '@/components/map';
+
 
   export default {
     name: "game",
     data(){
       return {
+        showMap: true,
         lobbyID: '',
         gameInfo: {},
         users: [],
@@ -51,14 +62,11 @@
         timerInterval: '',
         TimerVar: '',
         seconds: '',
-        showPick: false
+        showPick: false,
       }
     },
     sockets: {
       question(question) {
-
-        console.log(this.showPick);
-        console.log(question);
         this.question = question;
         this.showPick = true;
         console.log(this.showPick);
@@ -77,7 +85,8 @@
       this.gameInfo = this.$store.state.route.params.lobbyInfo;
 
       // запрос на первый вопрос
-      this.$socket.emit('getQuestion', this.gameInfo);
+
+      //this.$socket.emit('getQuestion', this.gameInfo);
     },
     methods: {
       getQuestion() {
@@ -102,7 +111,21 @@
           this.valueTimer += 20;
           this.seconds--;
         }, 1000)
+      },
+
+      changePositionMarker(e){
+        console.log(e);
+
+        setTimeout( () => {
+          this.showMap = false;
+        }, 2000);
+        setTimeout( () => {
+          this.showMap = true;
+        }, 4000);
       }
+    },
+    components: {
+      googleMap
     }
 
   }
