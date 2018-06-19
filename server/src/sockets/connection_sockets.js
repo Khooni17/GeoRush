@@ -184,6 +184,14 @@ module.exports = (io, socket) => {
       .catch()
   });
 
+  socket.on('getWhoAdmin', (lobbyID) => {
+    socket.to(lobbyID).emit('getAdminID');
+  });
+
+  socket.on('adminFounded', (lobbyInfo) => {
+    socket.to(lobbyInfo.lobbyID).emit('admin', lobbyInfo.adminID);
+  });
+
   socket.on('getInitialReady', (lobbyID) => {
     LobbyModel.findOne({lobbyID})
       .then((lobby) => {
@@ -322,7 +330,6 @@ module.exports = (io, socket) => {
 
     const getImage = () => {
       const queryString = `${places[Math.floor(Math.random() * places.length)]}+in+${countries[Math.floor(Math.random() * countries.length)]}`;
-      console.log(queryString);
       const options = {
         host: 'maps.googleapis.com',
         path: `/maps/api/place/textsearch/json?query=${queryString}&key=AIzaSyDOSq_kn0L-hgthgdNbywIpAaHcyZo51RM`
@@ -354,7 +361,6 @@ module.exports = (io, socket) => {
               }).on('end', () => {
 
                 let regexp = /"https.*"/;
-                console.log(imageChunks);
                 const photoURL = imageChunks.match(regexp)[0].split('"')[1];
 
                 socket.emit('question', {
@@ -389,7 +395,7 @@ module.exports = (io, socket) => {
 
       return 12742 * Math.asin(Math.sqrt(a)); // 2 * R; R = 6371 km
     }
-    console.log(gameInfo);
+
     const x = distance(gameInfo.question.answer.lat,
                        gameInfo.question.answer.lng,
                        gameInfo.answer.lat,

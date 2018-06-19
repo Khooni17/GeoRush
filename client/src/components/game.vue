@@ -79,7 +79,7 @@ import  googleMap from '@/components/map';
         TimerShowResults: '',
         seconds: '',
 
-        countPoints: [],
+        countPoints: [], // в маунтед щзагрузиьт сюда массив обьекстов
         tempResults: [],
         result: ''
       }
@@ -91,16 +91,15 @@ import  googleMap from '@/components/map';
 
         this.question = question;  // тут должен быть обьект с ссылкой и координатами
 
-        // запрос на вопрос отсылвет только админ
-        //if (this.gameInfo.admin === this.gameInfo.userID) {
 
-          clearTimeout(this.TimerQuestion);
-          this.TimerQuestion = this.getQuestion();
-          this.$socket.emit('sendQuestionToOthers', {
-            ...this.gameInfo,
-            question: question
-          });
-        //}
+
+        clearTimeout(this.TimerQuestion);
+        this.TimerQuestion = this.getQuestion();
+        this.$socket.emit('sendQuestionToOthers', {
+          ...this.gameInfo,
+          question: question
+        });
+
 
         clearTimeout(this.TimerShowResults);
         this.TimerShowResults = this.showAnswersAndAddResults();
@@ -108,17 +107,28 @@ import  googleMap from '@/components/map';
         this.timerFront();
 
       },
+
       userAnswered(answerInfo){
         this.tempResults.forEach( (user) => {
+          if(answerInfo.userID === this.gameInfo.userID){
+            this.now = 'answered';
+          }
           if(user.userID === answerInfo.userID){
             user.count = answerInfo.result;
           }
         });
       },
-      leaveSocket(userID){
+
+      leaveSocket (userID) {
         console.log('disco', userID);
+        console.log('admin', this.gameInfo.admin);
+        if ( userID === this.gameInfo.admin) {
+          this.gameInfo.users.splice(this.gameInfo.users.indexOf(userID), 1);  // удаляю этого пидора
+          this.gameInfo.admin = this.gameInfo.users[0]; // админом становится зашедший за ним чувак
+        }
       }
     },
+
     mounted () {
       this.lobbyID = this.$store.state.route.params.lobbyID;
       this.gameInfo = this.$store.state.route.params.lobbyInfo;
@@ -139,16 +149,22 @@ import  googleMap from '@/components/map';
         this.$socket.emit('getQuestion', this.gameInfo);
       }
     },
+
     methods: {
       showAnswersAndAddResults(){
         return setTimeout( () => {
           this.now = 'results';
-        }, 10000);
+
+        }, 8000);
       },
+
       getQuestion() {
         return setTimeout( () => {
-          this.$socket.emit('getQuestion', this.gameInfo);
-        }, 11000)
+          // запрос на вопрос отсылвет только админ
+          if (this.gameInfo.admin === this.gameInfo.userID) {
+            this.$socket.emit('getQuestion', this.gameInfo);
+          }
+        }, 10000);
       },
 
       sendAnswer () {
@@ -163,12 +179,14 @@ import  googleMap from '@/components/map';
         clearInterval(this.timerInterval);
 
         this.valueTimer = 0;
-        this.seconds = 5;
+        this.seconds = 30;
 
         this.timerInterval = setInterval( () => {
-          this.valueTimer += 20;
-          this.seconds--;
-        }, 1000)
+          this.valueTimer += 3.33333333;
+          if(this.seconds >= 0) {
+            this.seconds--;
+          }
+        }, 1000);
       },
 
       changePositionMarker(e){

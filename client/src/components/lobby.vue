@@ -90,7 +90,7 @@
         users: [],
         ready: [],
         userID: '',
-        admin: ''
+        admin: null
       }
     },
 
@@ -101,8 +101,27 @@
 
         if (users.length === 1) {
           this.admin = this.userID;
+        } else {
+          // узнаю кто админ
+          this.$socket.emit('getWhoAdmin', this.lobbyID);
         }
 
+      },
+
+      getAdminID(){
+        if (this.admin !== null) {
+          this.$socket.emit('adminFounded', {
+            adminID: this.admin,
+            lobbyID: this.lobbyID
+          });
+        }
+      },
+
+      admin(adminID){
+        console.log('adminID', adminID);
+        if (this.admin === null) {
+          this.admin = adminID;
+        }
       },
 
       // история сообщений
@@ -115,8 +134,7 @@
         this.messages.push(msg);
       },
 
-
-      addUserToLobby(userInfo){
+      addUserToLobby (userInfo) {
         this.users.push(userInfo.UserID);  // добавляю челика в список
         const messageObj = {
           lobbyID: this.lobbyID,
@@ -145,6 +163,8 @@
       initialReady(readyList){
         this.ready = readyList;
       },
+
+
 
       userReady(userID){
         this.ready.push(userID);
