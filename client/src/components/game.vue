@@ -1,39 +1,40 @@
 <template >
     <div>
-      <!--<div v-if="showPick" class="question">
-        <img v-bind:src="question" >
-      </div>-->
-      <div class="map"
+      <div class="users">
+        <h3>users</h3>
+        <ul v-for="user in gameInfo.users">
+          <li>
+            {{user}}
+          </li>
+        </ul>
+      </div>
+
+      <div v-if="now === 'game'" class="game">
+      <div class="question">
+        <img v-bind:src="question.photoURL" >
+      </div>
+        <div class="map"
         v-if="showMap"
       >
         <google-map
           @marker="changePositionMarker"
         ></google-map>
       </div>
-      <div class="users">
-        <h3>users</h3>
-          <ul v-for="user in gameInfo.users">
-            <li>
-              {{user}}
-            </li>
-          </ul>
-      </div>
-      <div class="timer">
+        <div class="timer">
 
-        <v-progress-circular
-          color="primary"
-          :size="200"
-          :width="15"
-          :rotate="360"
-          :value="valueTimer"
-        >
-          <h3>{{ seconds }}</h3>
+          <v-progress-circular
+            color="primary"
+            :size="200"
+            :width="15"
+            :rotate="360"
+            :value="valueTimer"
+          >
+            <h3>{{ seconds }}</h3>
 
-        </v-progress-circular>
+          </v-progress-circular>
 
 
-      </div>
-      <div class="game">
+        </div>
         <v-btn
           @click="sendAnswer"
           color="success">
@@ -41,7 +42,19 @@
           ответить
         </v-btn>
       </div>
-      a
+
+      <div v-if="now === 'answered'" class="answered">
+        ваш ответ отправлен
+      </div>
+
+      <div  v-if="now === 'results'" class="results">
+        results
+      </div>
+
+      <div v-if="now === 'lastResults'" class="last-results">
+        last results
+      </div>
+
     </div>
 </template >
 
@@ -53,51 +66,96 @@ import  googleMap from '@/components/map';
     name: "game",
     data(){
       return {
+        now: '',
         showMap: true,
         lobbyID: '',
         gameInfo: {},
         users: [],
         valueTimer: '',
         question: '',
+        positionMarker: '',
         timerInterval: '',
-        TimerVar: '',
+        TimerQuestion: '',
+        TimerShowResults: '',
         seconds: '',
-        showPick: false,
+
+        countPoints: [],
+        tempResults: [],
+        result: ''
       }
     },
     sockets: {
       question(question) {
-        this.question = question;
-        this.showPick = true;
-        console.log(this.showPick);
-        /*this.question = qstn._doc;
-        // создание таймера на отправление нового вопроса
-        clearTimeout(this.TimerVar);
-        this.TimerVar = this.getQuestion();
+        // начинается игра
+        this.now = 'game';
 
-        // отрисовка таймера
-        this.timerFront();*/
+        this.question = question;  // тут должен быть обьект с ссылкой и координатами
 
+        // запрос на вопрос отсылвет только админ
+        //if (this.gameInfo.admin === this.gameInfo.userID) {
+
+          clearTimeout(this.TimerQuestion);
+          this.TimerQuestion = this.getQuestion();
+          this.$socket.emit('sendQuestionToOthers', {
+            ...this.gameInfo,
+            question: question
+          });
+        //}
+
+        clearTimeout(this.TimerShowResults);
+        this.TimerShowResults = this.showAnswersAndAddResults();
+        // отрисовка таймера у всех
+        this.timerFront();
+
+      },
+      userAnswered(answerInfo){
+        this.tempResults.forEach( (user) => {
+          if(user.userID === answerInfo.userID){
+            user.count = answerInfo.result;
+          }
+        });
+      },
+      leaveSocket(userID){
+        console.log('disco', userID);
       }
     },
     mounted () {
       this.lobbyID = this.$store.state.route.params.lobbyID;
       this.gameInfo = this.$store.state.route.params.lobbyInfo;
+      this.gameInfo.users.forEach( (user) => {
+        this.countPoints.push({
+          userID: user,
+          count: 0
+        });
+        this.tempResults.push({
+          userID: user,
+          count: 0
+        });
+      });
+
 
       // запрос на первый вопрос
-
-      //this.$socket.emit('getQuestion', this.gameInfo);
+      if( this.gameInfo.admin === this.gameInfo.userID) {
+        this.$socket.emit('getQuestion', this.gameInfo);
+      }
     },
     methods: {
+      showAnswersAndAddResults(){
+        return setTimeout( () => {
+          this.now = 'results';
+        }, 10000);
+      },
       getQuestion() {
         return setTimeout( () => {
           this.$socket.emit('getQuestion', this.gameInfo);
-        }, 6000)
+        }, 11000)
       },
+
       sendAnswer () {
         this.$socket.emit('answer', {
           ...this.gameInfo,
-          question: this.question
+          question: this.question,
+          answer: this.positionMarker
         });
       },
 
@@ -114,14 +172,7 @@ import  googleMap from '@/components/map';
       },
 
       changePositionMarker(e){
-        console.log(e);
-
-        setTimeout( () => {
-          this.showMap = false;
-        }, 2000);
-        setTimeout( () => {
-          this.showMap = true;
-        }, 4000);
+        this.positionMarker = e;
       }
     },
     components: {

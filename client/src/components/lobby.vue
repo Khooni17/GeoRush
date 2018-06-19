@@ -89,16 +89,20 @@
         messages: [],
         users: [],
         ready: [],
-        userID: ''
+        userID: '',
+        admin: ''
       }
     },
 
     sockets: {
       // сначала получается список всех
       CountPeopleInLobby(users){
-        console.log('users');
         this.users = users;
-        console.log(users);
+
+        if (users.length === 1) {
+          this.admin = this.userID;
+        }
+
       },
 
       // история сообщений
@@ -170,7 +174,8 @@
             lobbyInfo: {
               ...this.lobbyInfo,
               userID: this.userID,
-              users: this.users
+              users: this.users,
+              admin: this.admin
             }
           }
         });

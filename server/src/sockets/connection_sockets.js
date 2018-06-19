@@ -145,7 +145,7 @@ module.exports = (io, socket) => {
   // отключение челика
   socket.on('disconnect', () => {
 
-    //  идет отсылка в лобби и превью
+    //  идет отсылка в лобби и превью  и гейм
     socket.broadcast.emit('leaveSocket', socket.id);
   });
 
@@ -187,9 +187,15 @@ module.exports = (io, socket) => {
   socket.on('getInitialReady', (lobbyID) => {
     LobbyModel.findOne({lobbyID})
       .then((lobby) => {
-        socket.emit('initialReady', lobby.ready);
+        try {
+          socket.emit('initialReady', lobby.ready );
+        } catch (err) {
+          socket.emit('initialReady', []);
+        }
       })
-      .catch()
+      .catch( (err) => {
+        console.log(err);
+      })
   });
 
   socket.on('tryToStart', (lobbyInfo) => {
@@ -206,10 +212,8 @@ module.exports = (io, socket) => {
   });
 
 
-
   socket.on('getQuestion', (gameInfo) => {
-    console.log(1);
-    const places = ['restaurants', 'parks', 'monuments', 'gardens', 'stadiums', 'constructions', 'museums'];
+    const places = ['parks', 'monuments', 'gardens', 'buidings'];
     const countries = ['Russia',
       'Australia',
       'Austria',
@@ -224,7 +228,7 @@ module.exports = (io, socket) => {
       'Bermuda',
       'Bulgaria',
       'Brazil',
-      'Great Britain',
+      'Great+Britain',
       'Hungary',
       'Vietnam',
       'Haiti',
@@ -315,102 +319,102 @@ module.exports = (io, socket) => {
       'South+Korea',
       'Jamaica',
       'Japan'];
-    const queryString = `${places[Math.floor(Math.random() * places.length)]}+in+${countries[Math.floor(Math.random() * countries.length)]}`;
-    console.log(queryString);
 
-    const options = {
-      host: 'maps.googleapis.com',
-      path: `/maps/api/place/textsearch/json?query=${queryString}&key=AIzaSyDOSq_kn0L-hgthgdNbywIpAaHcyZo51RM`
+    const getImage = () => {
+      const queryString = `${places[Math.floor(Math.random() * places.length)]}+in+${countries[Math.floor(Math.random() * countries.length)]}`;
+      console.log(queryString);
+      const options = {
+        host: 'maps.googleapis.com',
+        path: `/maps/api/place/textsearch/json?query=${queryString}&key=AIzaSyDOSq_kn0L-hgthgdNbywIpAaHcyZo51RM`
+      };
+      const req = https.get(options, function(res) {
+        let bodyChunks = [];
+        res.on('data', (chunk)  => {
+
+          bodyChunks.push(chunk);
+        }).on('end', () => {
+          let body = Buffer.concat(bodyChunks);
+          const parsedBody = JSON.parse(body);
+          const results = parsedBody.results;
+          try {
+            const randomResult = results[Math.floor(Math.random() * results.length)];
+            const photos = randomResult.photos;
+            const location = randomResult.geometry.location;
+            const photo = photos[0];
+            const photoReference = photo.photo_reference;
+
+            https.get({
+              host: 'maps.googleapis.com',
+              path: `/maps/api/place/photo?maxwidth=540&photoreference=${photoReference}&key=AIzaSyDOSq_kn0L-hgthgdNbywIpAaHcyZo51RM`
+            }, (res) => {
+
+              var imageChunks = '';
+              res.on('data', (chunk) => {
+                imageChunks += chunk;
+              }).on('end', () => {
+
+                let regexp = /"https.*"/;
+                console.log(imageChunks);
+                const photoURL = imageChunks.match(regexp)[0].split('"')[1];
+
+                socket.emit('question', {
+                  photoURL,
+                  answer: location
+                });
+              });
+            });
+          } catch (err) {
+            getImage();
+          }
+        });
+      });
     };
 
-    const req = https.get(options, function(res) {
-      console.log('STATUS: ' + res.statusCode);
-      //console.log('HEADERS: ' + JSON.stringify(res.headers));
+    getImage();
+  });
 
-      let bodyChunks = [];
-      res.on('data', (chunk)  => {
+  socket.on('sendQuestionToOthers', (gameInfo) => {
+    socket.to(gameInfo.lobbyID).emit('question', gameInfo.question);
+  });
 
-        // поставить условие наличие каритинки
-        bodyChunks.push(chunk);
-      }).on('end', () => {
-        let body = Buffer.concat(bodyChunks);
-        const parsedBody = JSON.parse(body);
-        const results = parsedBody.results;
-        const randomResult = results[Math.floor(Math.random() * results.length)];
-        console.log('randomResult ', randomResult);
-        const photo = randomResult.photos[0];
-        const photoReference = photo.photo_reference;
+  socket.on('answer', (gameInfo) => {
 
-        https.get({
-          host : 'maps.googleapis.com',
-          path: `/maps/api/place/photo?maxwidth=540&photoreference=${photoReference}&key=AIzaSyDOSq_kn0L-hgthgdNbywIpAaHcyZo51RM`
-        }, (res) => {
+    // оценка ответа
+    function distance(lat1, lon1, lat2, lon2) {
+      let p = 0.017453292519943295;    // Math.PI / 180
+      let c = Math.cos;
+      let a = 0.5 - c((lat2 - lat1) * p)/2 +
+        c(lat1 * p) * c(lat2 * p) *
+        (1 - c((lon2 - lon1) * p))/2;
 
-          let imageChunks = '';
-          res.on('data', (chunk)  => {
-            imageChunks += chunk;
-          }).on('end', () => {
-            let regexp = /"https.*"/;
-            const photoURL = imageChunks.match(regexp)[0].split('"')[1];
-            console.log(photoURL);
-            socket.emit('question', photoURL);
-          });
-        });
+      return 12742 * Math.asin(Math.sqrt(a)); // 2 * R; R = 6371 km
+    }
+    console.log(gameInfo);
+    const x = distance(gameInfo.question.answer.lat,
+                       gameInfo.question.answer.lng,
+                       gameInfo.answer.lat,
+                       gameInfo.answer.lng);
 
-        //console.log(photoReference);
-      });
+    let result;
+    if (x > 10000) {
+      result = 0;
+    } else {
+      result = Math.ceil(Math.pow((x - 12000), 2) * 5 * Math.pow(10, -6));
+    }
+
+    // другим емит, количество баллов
+    socket.to(gameInfo.lobbyID).emit('userAnswered', {
+      userID: gameInfo.userID,
+      result: result
+    });
+
+    socket.emit('userAnswered', {
+      userID: gameInfo.userID,
+      result: result
     });
   });
 
 
-  /*
-    questionModel.count()
-      .then( (count) => {
-        const randNum = Math.floor(Math.random() * count);
-        questionModel.findOne({id : randNum})
-          .then( (qstn) => {
-            socket.emit('question', {
-              ...qstn,
-              from: 'question'
-            });
-          })
-          .catch(() => {})
-      });
-*/
-
-
-  socket.on('answer', (gameInfo) => {
-
-   // сохранение, что этот челик отвечал
-   questionModel.findOne({id: gameInfo.question.id})
-     .then( (question) => {
-       question.alreadyAnswered.push(gameInfo.userID);
-       question.save()
-         .then( () => {})
-     })
-     .catch( () => {});
-
-
-   // оценка ответа
-
-    // другим емит, количество баллов
-
-
-
-    // отправка нового вопроса
-    questionModel.count()
-      .then( (count) => {
-        const randNum = Math.floor(Math.random() * count);
-        questionModel.findOne({id : randNum})
-          .then( (qstn) => {
-            socket.emit('question', {
-              ...qstn,
-              from: 'answer'
-            });
-          })
-          .catch(() => {})
-      });
-  });
 
 
 
@@ -419,6 +423,4 @@ module.exports = (io, socket) => {
 
 
 
-
-
-}
+};
