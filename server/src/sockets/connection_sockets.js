@@ -221,6 +221,7 @@ module.exports = (io, socket) => {
 
 
   socket.on('getQuestion', (gameInfo) => {
+
     const places = ['parks', 'monuments', 'gardens', 'buidings'];
     const countries = ['Russia',
       'Australia',
@@ -365,7 +366,8 @@ module.exports = (io, socket) => {
 
                 socket.emit('question', {
                   photoURL,
-                  answer: location
+                  answer: location,
+                  numQuestion : gameInfo.numQuestion
                 });
               });
             });
