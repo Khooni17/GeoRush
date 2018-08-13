@@ -1,60 +1,78 @@
 <template >
     <div>
-      <div v-if="now === 'game' || now === 'answered'" class="users">
-        <h3> users </h3>
-        <ul v-for="user in countPoints">
-          <li>
-            <p>
-              {{ `${user.userID} - ${user.count}` }}
-            </p>
-          </li>
-        </ul>
-      </div>
-
       <div v-if="now === 'game'" class="game">
-      <div class="question">
-        <img v-bind:src="question.photoURL" >
-      </div>
-        <div class="map"
-        v-if="showMap"
-      >
-        <google-map
-          @marker="changePositionMarker"
-        ></google-map>
-      </div>
-        <div class="timer">
-
-          <v-progress-circular
-            color="primary"
-            :size="200"
-            :width="15"
-            :rotate="360"
-            :value="valueTimer"
-          >
-            <h3>{{ seconds }}</h3>
-
-          </v-progress-circular>
-
-
+        <div class="left">
+          <div class="timer-container">
+            <div class="timer">
+              <h3>{{ seconds }}</h3>
+            </div>
+          </div>
         </div>
-        <v-btn
-          @click="sendAnswer"
-          color="success">
 
-          ответить
-        </v-btn>
+        <div class="mid">
+            <img
+              class="question"
+              v-bind:src="question.photoURL" >
+          <div class="map-container"
+                 v-if="showMap">
+              <google-map
+                class="map"
+                @marker="changePositionMarker">
+              </google-map>
+            </div>
+
+            <a v-if="positionMarker !== ''"   @click="sendAnswer">
+              ответить
+            </a>
+        </div>
+
+          <div class="right">
+            <div class="users"
+                 v-if="now === 'game' || now === 'answered'" >
+              <h3> users </h3>
+              <ul v-for="user in countPoints">
+                <li>
+                  <p>
+                    {{ `${user.userID} - ${user.count}` }}
+                  </p>
+                </li>
+              </ul>
+            </div>
+          </div>
+
       </div>
+
 
       <div v-if="now === 'answered'" class="answered">
-        ваш ответ отправлен
-      </div>
-
-      <div  v-if="now === 'results'" class="results">
-        <h2>results</h2>
-        <div v-for="result in tempResults">
-          <p>{{ `${result.userID} - ${result.count}` }}</p>
+        <h3>
+          ваш ответ отправлен
+        </h3>
+        <div class="timer">
+          <h3>{{ seconds }}</h3>
         </div>
       </div>
+
+
+      <div  v-if="now === 'results'" class="results">
+        <div class="results-others">
+          <h2>как ответили другие</h2>
+          <div v-for="result in tempResults">
+            <p>{{ `${result.userID} - ${result.count}` }}</p>
+          </div>
+        </div>
+        <div class="answer">
+          <h2> {{ namePlace }}</h2>
+          <div class="image-answer-container">
+            <img v-bind:src="question.photoURL" >
+          </div>
+          <div class="map-result-container">
+            <mapResult
+              :coordinates="answer"
+            />
+          </div>
+        </div>
+      </div>
+
 
       <div v-if="now === 'lastResults'" class="last-results">
         <h3> last results </h3>
@@ -67,12 +85,24 @@
         </ul>
       </div>
 
+      <b-container v-if="now === 'lastResults'">
+        <b-row class="border-dark" v-for="message in messages">
+          <b-col>{{ message.username }}</b-col>
+          <b-col>{{ message.text }}</b-col>
+          <b-col>{{ message.date }}</b-col>
+        </b-row>
+        <br>
+        <input type="text" v-model="messageText">
+        <button @click="sendMessage">
+          send
+        </button>
+      </b-container>
     </div>
 </template >
 
 <script >
 import  googleMap from '@/components/map';
-
+import  mapResult from '@/components/mapResult';
 
   export default {
     name: "game",
@@ -85,6 +115,8 @@ import  googleMap from '@/components/map';
         users: [],
         valueTimer: '',
         question: '',
+        answer: null,
+        namePlace: '',
         positionMarker: '',
         timerInterval: '',
         TimerQuestion: '',
@@ -93,15 +125,36 @@ import  googleMap from '@/components/map';
 
         countPoints: [],
         tempResults: [],
-        result: ''
+        result: '',
+
+        messages: [],
+        messageText: ''
       }
     },
     sockets: {
-      question(question) {
-        console.log(question);
+      historyMessages (messages) {
+        this.messages = messages;
+      },
+
+      redirectToMain (lobbyID) {
+        this.$socket.emit('closeLobby', this.lobbyID);
+        if (this.lobbyID === lobbyID) {
+          this.$router.push({
+            name: 'lobbiesListing'
+          });
+        }
+      },
+      //  если будет сообщение оно отобразится
+      newMessageInLobby(msg){
+        this.messages.push(msg);
+      },
+
+      question (question) {
         // начинается игра
+        this.namePlace = question.namePlace;
         this.now = 'game';
         this.question = question;  // тут должен быть обьект с ссылкой и координатами
+        this.answer = question.answer;
         if(this.gameInfo.userID === this.gameInfo.admin) {
           this.$socket.emit('sendQuestionToOthers', {
             ...this.gameInfo,
@@ -179,12 +232,19 @@ import  googleMap from '@/components/map';
         return setTimeout( () => {
           this.now = 'results';
 
+          // игра завершается
           if(question.numQuestion === 2){
             setTimeout(() => {
               this.now = 'lastResults';
-            }, 8000);
+              // изменение статуса в бд
+              if (this.gameInfo.admin === this.gameInfo.userID) {
+                this.$socket.emit('gameFinished', this.gameInfo);
+              }
+              // запрос на историю сообщений
+              this.$socket.emit('getHistoryMessages', this.lobbyID);
+            }, 888000);
           }
-        }, 8000);
+        }, 888000);
       },
 
       getQuestion(question) {
@@ -196,7 +256,7 @@ import  googleMap from '@/components/map';
               numQuestion: ++question.numQuestion
             });
           }
-        }, 10000);
+        }, 100000);
       },
 
       sendAnswer () {
@@ -221,17 +281,81 @@ import  googleMap from '@/components/map';
         }, 1000);
       },
 
-        changePositionMarker (e) {
+      changePositionMarker (e) {
         this.positionMarker = e;
+      },
+
+      sendMessage () {
+        this.$socket.emit('sendMessageToLobby', {
+          lobbyID: this.lobbyID,
+          text: this.messageText
+        });
+        this.messageText = '';
       }
     },
     components: {
-      googleMap
+      googleMap,
+      mapResult
     }
 
   }
 </script >
 
 <style scoped >
+  .game {
+    height: 80vh;
+    display: flex;
+    flex-direction: row;
+  }
+
+  .left {
+    width: 17vw;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.49);
+  }
+
+  .right {
+    width: 17vw;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.49);
+  }
+
+  .mid {
+    width: 56vw;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    overflow: hidden;
+    position: relative;
+    box-shadow: -1px 1px 3px black ;
+  }
+
+
+  .question {
+    height: 65%;
+    position: absolute;
+    top: 2%;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .map-container {
+    position: absolute;
+    bottom: 3%;
+
+    overflow: hidden;
+    height: 24%;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .map-container:hover {
+    height: 45%;
+  }
+
+  .map {
+    padding-bottom: -30%;
+    height: 100%;
+    width: 100%;
+  }
 
 </style >

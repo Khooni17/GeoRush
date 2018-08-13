@@ -26,6 +26,17 @@ module.exports = (io, socket) => {
       });
   });
 
+  socket.on('getReceivedLobbies', () => {
+     LobbyModel.find()
+         .then( (lobbies) => {
+             let received = [];
+             lobbies.forEach( (lobby) => {
+                 received.push(lobby.lobbyID);
+             });
+             socket.emit('reveivedLobbies', received);
+         })
+  });
+
   socket.on('getLobbyByID', (lobbyID) => {
     LobbyModel.findOne({lobbyID: lobbyID})
       .then((lobbyInfo) => {
@@ -40,7 +51,8 @@ module.exports = (io, socket) => {
     const trueLobbyInfo = {
       ...lobbyInfo,
       status: 'created',
-      players: []
+      players: [],
+      date: new Date()
     };
 
     socket.emit('lobbyCreated', trueLobbyInfo);   // для создателя
@@ -124,6 +136,25 @@ module.exports = (io, socket) => {
         socket.emit('historyMessages', []);
       });
   });
+
+
+    socket.on('getHistoryGlobalChat', () => {
+        messageModel.find({lobbyID: 'global'})
+            .then((messages) => {
+                socket.emit('historyGlobalChat', messages);
+            })
+            .catch((err) => {
+                socket.emit('historyGlobalChat', messages);
+            });
+    });
+
+  socket.on('sendMessageToGlobalChat', (message) => {
+    io.emit('newMessageToGlobalChat', {
+        ...message,
+        date: new Date()
+    });
+  });
+
 
   //  отправление смс в лобби
   socket.on('sendMessageToLobby', (messageInfo) => {
@@ -215,10 +246,51 @@ module.exports = (io, socket) => {
     if (lobbyInfo.allReady && allInPlace) {
       // начинается игра
       socket.emit('setStartGameTimer');
+
+      // смена статуса лобби
+        LobbyModel.findOne({lobbyID: lobbyInfo.lobbyID})
+            .then( (lobby) => {
+              lobby.status = 'game';
+              lobby.save()
+                  .then(() => {})
+                  .catch()
+            })
+            .catch();
+
+        // скрытие лобби
+        socket.broadcast.emit('hideRoom', lobbyInfo.lobbyID);
     }
+
+    // удаление лобби
+      /*setTimeout( () => {
+        // редирект всех на главную
+          socket.emit('redirectToMain', lobbyInfo.lobbyID);
+          socket.to(lobbyInfo.lobbyID).emit('redirectToMain', lobbyInfo.lobbyID);
+      }, 10000)  //  60000 * 20*/
+  });
+
+  socket.on('closeLobby', (lobbyID) => {
+      // кик
+      socket.leave(lobbyID);
+      // удалить лобби
+      LobbyModel.findOne({ lobbyID })
+          .remove()
+          .then( () => {
+              // емит - освобождение имени
+              io.emit('nameReleased', lobbyID);
+          })
+          .catch( (e) => {
+            console.log(e);
+          })
+      // удаление всех сообщений
+      messageModel.find({lobbyID}).remove().exec();
+
 
   });
 
+  socket.on('deleteMessages', (lobbyID) => {
+    messageModel.find({lobbyID}).remove().exec();
+  });
 
   socket.on('getQuestion', (gameInfo) => {
 
@@ -330,7 +402,9 @@ module.exports = (io, socket) => {
       'Japan'];
 
     const getImage = () => {
-      const queryString = `${places[Math.floor(Math.random() * places.length)]}+in+${countries[Math.floor(Math.random() * countries.length)]}`;
+      const randPlace = places[Math.floor(Math.random() * places.length)];
+      const randCountry = countries[Math.floor(Math.random() * countries.length)];
+      const queryString = `${randPlace}+in+${randCountry}`;
       const options = {
         host: 'maps.googleapis.com',
         path: `/maps/api/place/textsearch/json?query=${queryString}&key=AIzaSyDOSq_kn0L-hgthgdNbywIpAaHcyZo51RM`
@@ -348,8 +422,16 @@ module.exports = (io, socket) => {
             const randomResult = results[Math.floor(Math.random() * results.length)];
             const photos = randomResult.photos;
             const location = randomResult.geometry.location;
+
+            // result
+
+
+            const namePlace = `${randomResult.name} in ${randCountry}`;
+
             const photo = photos[0];
             const photoReference = photo.photo_reference;
+
+
 
             https.get({
               host: 'maps.googleapis.com',
@@ -367,7 +449,8 @@ module.exports = (io, socket) => {
                 socket.emit('question', {
                   photoURL,
                   answer: location,
-                  numQuestion : gameInfo.numQuestion
+                  numQuestion : gameInfo.numQuestion,
+                  namePlace
                 });
               });
             });
@@ -422,6 +505,22 @@ module.exports = (io, socket) => {
     });
   });
 
+  socket.on('gameFinished', (gameInfo) => {
+      LobbyModel.findOne({lobbyID: gameInfo.lobbyID})
+          .then( (lobby) => {
+              try{
+                lobby.status = 'finished';
+                lobby.save()
+                    .then()
+                    .catch()
+              } catch (e) {
+
+              }
+          })
+          .catch()
+
+
+  });
 
 
 

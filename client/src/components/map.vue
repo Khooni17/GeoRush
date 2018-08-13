@@ -20,7 +20,7 @@
       const element = document.getElementById('appMap');
       const options = {
         zoom: 1,
-        center: new google.maps.LatLng(59.93, 30.32),
+        center: new google.maps.LatLng(0.93, 50.32),
         fullscreenControl: false,
         gestureHandling: 'greedy',
         keyboardShortcuts: false,
