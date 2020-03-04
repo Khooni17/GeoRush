@@ -1,54 +1,28 @@
 <template>
-    <div id="app">
-      <div class="container">
-        <my-header></my-header>
-        <transition name="route" mode="out-in">
-          <router-view style="z-index: 10;"/>
-        </transition>
-      </div>
-    </div>
+  <div id="app">
+    <header-component></header-component>
+    <router-view />
+  </div>
 </template>
 
 <script>
-  import myHeader from '@/components/myHeader';
+  import headerComponent from './components/HeaderComponent'
 
   export default {
-    name: 'App',
+    name: 'app',
+    data () {
+      return {
+
+      }
+    },
     components: {
-      myHeader
+      headerComponent
     }
-  }
+}
 </script>
 
-<style scoped>
-
-  .container {
-    font-family: 'PT Serif', 'Roboto Slab', serif;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: space-evenly;
+<style lang="scss">
+  body {
+    margin: 0;
   }
-
-
-  .route-enter-active {
-    animation: route-enter 0.7s ease-in;
-  }
-
-  .route-leave-active {
-    animation: route-leave 0.7s ease-in;
-  }
-
-  @keyframes route-enter {
-    0% {
-      transform: translateX(100%);
-    }
-  }
-
-  @keyframes route-leave {
-    100% {
-      transform: translateX(-100%);
-    }
-  }
-
 </style>
