@@ -3,523 +3,377 @@ const LobbyModel = require('../models/lobby');
 const questionModel = require('../models/question_model');
 const https = require('https');
 const _ = require('lodash');
-
-
+const MongoClient = require('mongodb').MongoClient;
 
 module.exports = (io, socket) => {
-  socket.on('getCreatedLobbies', () => {
-    LobbyModel.find({status: 'created'})
-      .then(lobbies => {
-        /// map добавляет к каждому лобби игроков онлайн
-        lobbies.map((lobby) => {
-          const alreadyConnected = io.nsps['/'].adapter.rooms[lobby.lobbyID] ?
-            Object.keys(io.nsps['/'].adapter.rooms[lobby.lobbyID].sockets) : [];
-          lobby.players = alreadyConnected;
-          return lobby;
+    socket.on('saveNick', (nick) => {
+        var db;
+        MongoClient.connect('mongodb://localhost:27017/geoRush', function(err,database) {
+            if(err){
+                return console.log(err)
+            }
+            db = database;
+            db.collection('nicknames').insert(nick, (err, result)=> {
+                if(err){
+                    return console.log(err);
+                }
+                console.log(nick);
+                db.collection('nicknames').find().toArray(function(err,docs) {
+                    if(err){
+                        return console.log(err);
+                    }
+                    docs = docs.sort((a, b) => a.score < b.score ? 1 : -1).slice(0,9);
+                    socket.emit('saved', docs);
+                })
+            })
         });
 
-        socket.emit('createdLobbies', lobbies);
-      })
-      .catch((err) => {
-        socket.emit('createdLobbies', []);
-      });
-  });
-
-  socket.on('getReceivedLobbies', () => {
-     LobbyModel.find()
-         .then( (lobbies) => {
-             let received = [];
-             lobbies.forEach( (lobby) => {
-                 received.push(lobby.lobbyID);
-             });
-             socket.emit('reveivedLobbies', received);
-         })
-  });
-
-  socket.on('getLobbyByID', (lobbyID) => {
-    LobbyModel.findOne({lobbyID: lobbyID})
-      .then((lobbyInfo) => {
-        socket.emit('lobbyByID', lobbyInfo);
-      })
-      .catch((err) => {
-        socket.emit('lobbyByID', {});
-      });
-  });
-  // создание лобби
-  socket.on('createLobby', (lobbyInfo) => {
-    const trueLobbyInfo = {
-      ...lobbyInfo,
-      status: 'created',
-      players: [],
-      date: new Date()
-    };
-
-    socket.emit('lobbyCreated', trueLobbyInfo);   // для создателя
-    socket.broadcast.emit('newLobby', trueLobbyInfo);  // для остальных
-    LobbyModel.create(trueLobbyInfo, (err) => {
-      if (err) {
-        return console.error(err);
-      }
     });
-  });
 
-  // начальная информация о лобби в превью
-  socket.on('getLobbyInfo', (lobbyID) => {
-
-    LobbyModel.findOne({lobbyID: lobbyID})
-      .then((res) => {
-        io.emit('lobbyInfo', res);
-      })
-      .catch((err) => {
-        console.error("LobbyModel", err);
-      })
-  });
-
-  // количество людей в превью и лобби
-  socket.on('getCountPeopleInLobby', (lobbyID) => {
-    const alreadyConnected = io.nsps['/'].adapter.rooms[lobbyID] ?
-      Object.keys(io.nsps['/'].adapter.rooms[lobbyID].sockets) : [];
-    socket.emit('CountPeopleInLobby', alreadyConnected);
-  });
-
-  socket.on('getCountPeopleInLobbyToListing', (lobbyID) => {
-    const alreadyConnected = io.nsps['/'].adapter.rooms[lobbyID] ?
-      Object.keys(io.nsps['/'].adapter.rooms[lobbyID].sockets) : [];
-    socket.emit('CountPeopleInLobbyToListing', {
-      players: alreadyConnected,
-      lobbyID: lobbyID
-    });
-  });
-
-  // подкобчение к лобби
-  socket.on('connectLobby', (lobbyInfo) => {
-
-    // сначала проверка есть ли места
-    const alreadyConnected = io.nsps['/'].adapter.rooms[lobbyInfo.lobbyID] ?
-      Object.keys(io.nsps['/'].adapter.rooms[lobbyInfo.lobbyID].sockets) : [];
-    if (alreadyConnected.length === lobbyInfo.countPlayers) {
-      socket.emit('lobbyFilled');
-    }
-    // пропуск в комнату
-    else {
-      socket.join(lobbyInfo.lobbyID);
-
-      // проверка пора ли скрывать комнату
-      if (alreadyConnected.length + 1 === lobbyInfo.countPlayers) {
-        setTimeout(() => {
-          io.emit('hideRoom', lobbyInfo.lobbyID)
-        }, 3000);
-      }
-    }
-
-    const fullLobbyInfo = {
-      ...lobbyInfo,
-      UserID: socket.id
-    };
-
-    //console.log(fullLobbyInfo);
-
-    io.emit('connectSuccess', fullLobbyInfo);  // для меня
-
-    socket.broadcast.emit('addUserToReviewLobby', fullLobbyInfo);  // для остальных
-    socket.to(lobbyInfo.lobbyID).emit('addUserToLobby', fullLobbyInfo);  // для лобби
-  });
-
-  //  отправка истории сообщений в лобби
-  socket.on('getHistoryMessages', (lobbyID) => {
-    messageModel.find({lobbyID: lobbyID})
-      .then((messages) => {
-        socket.emit('historyMessages', messages);
-      })
-      .catch((err) => {
-        socket.emit('historyMessages', []);
-      });
-  });
-
-
-    socket.on('getHistoryGlobalChat', () => {
-        messageModel.find({lobbyID: 'global'})
-            .then((messages) => {
-                socket.emit('historyGlobalChat', messages);
+    socket.on('getTopPlayers', () => {
+        var db;
+        MongoClient.connect('mongodb://localhost:27017/geoRush', function(err,database) {
+            if(err){
+                return console.log(err)
+            }
+            db = database;
+            db.collection('nicknames').find().toArray(function(err,docs) {
+                if(err){
+                    return console.log(err);
+                }
+                docs = docs.sort((a, b) => a.score < b.score ? 1 : -1).slice(0,9);
+                socket.emit('topPlayersList', docs);
             })
-            .catch((err) => {
-                socket.emit('historyGlobalChat', messages);
-            });
-    });
+        });
 
-  socket.on('sendMessageToGlobalChat', (message) => {
-    io.emit('newMessageToGlobalChat', {
-        ...message,
-        date: new Date()
-    });
-  });
+    })
 
+    socket.on('getQuestion', (gameInfo) => {
+        const places = ['parks', 'buidings','places',];
+        const countriesRus = [
+            "Россия",
+            "Австралия",
+            "Австрия",
+            "Азербайджан",
+            "Ангилья",
+            "Аргентина",
+            "Армения",
+            "Арулько",
+            "Беларусь",
+            "Белиз",
+            "Бельгия",
+            'Бермуды',
+            "Болгария",
+            "Бразилия",
+            "Венгрия",
+            "Вьетнам",
+            "Гаити",
+            "Гваделупа",
+            "Германия",
+            "Голландия",
+            "Гондурас",
+            "Гонконг Гонконг",
+            "Греция",
+            "Грузия",
+            "Дания",
+            'Доминиканской Республики',
+            "Египет",
+            "Израиль",
+            "Индия",
+            "Индонезия",
+            "Иордания",
+            "Ирак",
+            "Иран",
+            "Ирландия",
+            "Испания",
+            "Италия",
+            "Казахстан",
+            "Камерун",
+            "Канада",
+            "Карибский",
+            "Кипр",
+            "Кыргызстан",
+            "Китай",
+            "Корея",
+            "Коста Рика",
+            "Куба",
+            "Кувейт",
+            "Латвия",
+            "Ливан",
+            "Ливан",
+            "Ливия",
+            "Литва",
+            "Люксембург",
+            "Македония",
+            "Малайзия",
+            "Мальта",
+            "Мексика",
+            "Мозамбик",
+            "Молдова",
+            "Монако",
+            "Монголия",
+            "Марокко",
+            "Нидерланды",
+            "новая Зеландия",
+            "Норвегия",
+            "Пакистан",
+            "Перу",
+            "Польша",
+            "Португалия",
+            "Воссоединение",
+            "Румыния",
+            "США",
+            "Сингапур",
+            "Сирия",
+            "Словакия",
+            "Словения",
+            "Суринам",
+            "Таджикистан",
+            "Тайвань",
+            "Таиланд",
+            "Тунис",
+            "Туркменистан",
+            "Туркменистан",
+            "Турция",
+            "Уганда",
+            "Узбекистан",
+            "Украина",
+            "Финляндия",
+            "Франция",
+            "Хорватия",
+            "Чешский",
+            "Чили",
+            "Швейцария",
+            "Швеция",
+            "Эквадор",
+            "Эстония",
+            "Южная Африка",
+            "Югославия",
+            "Южная Корея",
+            "Ямайка",
+            "Япония"
+        ];
+        const countries = [
+            "Russia",
+            "Australia",
+            "Austria",
+            "Azerbaijan",
+            "Anguilla",
+            "Argentina",
+            "Armenia",
+            "Arulco",
+            "Belarus",
+            "Belize",
+            "Belgium",
+            'Bermuda',
+            "Bulgaria",
+            "Brazil",
+            "Hungary",
+            "Vietnam",
+            "Haiti",
+            "Guadeloupe",
+            "Germany",
+            "Holland",
+            "Honduras",
+            "Hong Kong+Hong Kong",
+            "Greece",
+            "Georgia",
+            "Denmark",
+            'Dominican+Republic',
+            "Egypt",
+            "Israel",
+            "India",
+            "Indonesia",
+            "Jordan",
+            "Iraq",
+            "Iran",
+            "Ireland",
+            "Spain",
+            "Italy",
+            "Kazakhstan",
+            "Cameroon",
+            "Canada",
+            "Caribbean",
+            "Cyprus",
+            "Kyrgyzstan",
+            "China",
+            "Korea",
+            "Costa+Rika",
+            "Cuba",
+            "Kuwait",
+            "Latvia",
+            "Lebanon",
+            "Lebanon",
+            "Livia",
+            "Lithuania",
+            "Luxembourg",
+            "Macedonia",
+            "Malaysia",
+            "Malta",
+            "Mexico",
+            "Mozambique",
+            "Moldova",
+            "Monaco",
+            "Mongolia",
+            "Morocco",
+            "Netherlands",
+            "New+Zealand",
+            "Norway",
+            "Pakistan",
+            "Peru",
+            "Poland",
+            "Portugal",
+            "Reunion",
+            "Romania",
+            "USA",
+            "Singapore",
+            "Syria",
+            "Slovakia",
+            "Slovenia",
+            "Suriname",
+            "Tajikistan",
+            "Taiwan",
+            "Thailand",
+            "Tunis",
+            "Turkmenistan",
+            "Turkmenistan",
+            "Turkey",
+            "Uganda",
+            "Uzbekistan",
+            "Ukraine",
+            "Finland",
+            "France",
+            "Croatia",
+            "Czech",
+            "Chile",
+            "Switzerland",
+            "Sweden",
+            "Ecuador",
+            "Estonia",
+            "South+Africa",
+            "Yugoslavia",
+            "South+Korea",
+            "Jamaica",
+            "Japan"
+        ];
 
-  //  отправление смс в лобби
-  socket.on('sendMessageToLobby', (messageInfo) => {
-    // прикручивание даты и id юзера
-    const message = {
-      ...messageInfo,
-      username: socket.id,
-      date: new Date()
-    };
+        const getImage = () => {
+            const randPlace = places[Math.floor(Math.random() * places.length)];
+            const randCountryNum = Math.floor(Math.random() * countries.length);
+            const queryString = `${randPlace}+in+${countries[randCountryNum]}`;
+            const options = {
+                host: 'maps.googleapis.com',
+                path: `/maps/api/place/textsearch/json?query=${queryString}&key=AIzaSyDOSq_kn0L-hgthgdNbywIpAaHcyZo51RM`
+            };
+            const req = https.get(options, function(res) {
+                let bodyChunks = [];
+                res.on('data', (chunk)  => {
 
-    // отправка в бд, и если отправилось отправляется на клиент
-    messageModel.create(message, (err) => {
-      if (!err) {
-        io.sockets.in(messageInfo.lobbyID).emit('newMessageInLobby', message);
-      }
-    });
-  });
+                    bodyChunks.push(chunk);
+                }).on('end', () => {
+                    let body = Buffer.concat(bodyChunks);
+                    const parsedBody = JSON.parse(body);
+                    const results = parsedBody.results;
+                    try {
+                        const randomResult = results[Math.floor(Math.random() * results.length)];
+                        const photos = randomResult.photos;
+                        const location = randomResult.geometry.location;
+                        const photo = photos[0];
+                        const photoReference = photo.photo_reference;
 
-  // отключение челика
-  socket.on('disconnect', () => {
+                        https.get({
+                            host: 'maps.googleapis.com',
+                            path: `/maps/api/place/photo?maxwidth=540&photoreference=${photoReference}&key=AIzaSyDOSq_kn0L-hgthgdNbywIpAaHcyZo51RM`
+                        }, (res) => {
 
-    //  идет отсылка в лобби и превью  и гейм
-    socket.broadcast.emit('leaveSocket', socket.id);
-  });
+                            let imageChunks = '';
+                            res.on('data', (chunk) => {
+                                imageChunks += chunk;
+                            }).on('end', () => {
 
-  socket.on('showRoom', _.debounce(async function (lobbyID) {
-    socket.broadcast.emit('showingRoom', lobbyID);
-  }, (Math.random() * (500 - 1) + 1)));
+                                let regexp = /"https.*"/;
+                                const photoURL = imageChunks.match(regexp)[0].split('"')[1];
 
+                                let randCountries = [];
+                                randCountries.push(countriesRus[Math.floor(Math.random() * countries.length)]);
+                                randCountries.push(countriesRus[Math.floor(Math.random() * countries.length)]);
+                                randCountries.push(countriesRus[Math.floor(Math.random() * countries.length)]);
+                                randCountries.push(countriesRus[randCountryNum]);
 
-  socket.on('readyToPLay', (userInfo) => {
-    LobbyModel.findOne({lobbyID: userInfo.lobbyID})
-      .then((lobby) => {
-        lobby.ready.push(userInfo.userID);
-        lobby.save()
-          .then(() => {
-            socket.to(userInfo.lobbyID).emit('userReady', userInfo.userID);  //  для групы
-            socket.emit('userReady', userInfo.userID);   // для меня
-          })
-          .catch();
-      })
-      .catch();
+                                randCountries = randCountries.sort(function(){
+                                    return Math.random() - 0.5;
+                                })
 
-
-  });
-
-  socket.on('unreadyToPLay', (userInfo) => {
-    LobbyModel.findOne({lobbyID: userInfo.lobbyID})
-      .then((lobby) => {
-        lobby.ready.splice(lobby.ready.indexOf(userInfo.userID), 1);
-        lobby.save()
-          .then(() => {
-            socket.to(userInfo.lobbyID).emit('userUnready', userInfo.userID); //  для групы
-            socket.emit('userUnready', userInfo.userID); // для меня
-          })
-          .catch()
-      })
-      .catch()
-  });
-
-  socket.on('getWhoAdmin', (lobbyID) => {
-    socket.to(lobbyID).emit('getAdminID');
-  });
-
-  socket.on('adminFounded', (lobbyInfo) => {
-    socket.to(lobbyInfo.lobbyID).emit('admin', lobbyInfo.adminID);
-  });
-
-  socket.on('getInitialReady', (lobbyID) => {
-    LobbyModel.findOne({lobbyID})
-      .then((lobby) => {
-        try {
-          socket.emit('initialReady', lobby.ready );
-        } catch (err) {
-          socket.emit('initialReady', []);
-        }
-      })
-      .catch( (err) => {
-        console.log(err);
-      })
-  });
-
-  socket.on('tryToStart', (lobbyInfo) => {
-    const alreadyConnected = io.nsps['/'].adapter.rooms[lobbyInfo.lobbyID] ?
-      Object.keys(io.nsps['/'].adapter.rooms[lobbyInfo.lobbyID].sockets) : [];
-
-    const allInPlace = alreadyConnected.length == lobbyInfo.countPlayers;
-    // згначит все тут и все готовы
-    if (lobbyInfo.allReady && allInPlace) {
-      // начинается игра
-      socket.emit('setStartGameTimer');
-
-      // смена статуса лобби
-        LobbyModel.findOne({lobbyID: lobbyInfo.lobbyID})
-            .then( (lobby) => {
-              lobby.status = 'game';
-              lobby.save()
-                  .then(() => {})
-                  .catch()
-            })
-            .catch();
-
-        // скрытие лобби
-        socket.broadcast.emit('hideRoom', lobbyInfo.lobbyID);
-    }
-
-    // удаление лобби
-      /*setTimeout( () => {
-        // редирект всех на главную
-          socket.emit('redirectToMain', lobbyInfo.lobbyID);
-          socket.to(lobbyInfo.lobbyID).emit('redirectToMain', lobbyInfo.lobbyID);
-      }, 10000)  //  60000 * 20*/
-  });
-
-  socket.on('closeLobby', (lobbyID) => {
-      // кик
-      socket.leave(lobbyID);
-      // удалить лобби
-      LobbyModel.findOne({ lobbyID })
-          .remove()
-          .then( () => {
-              // емит - освобождение имени
-              io.emit('nameReleased', lobbyID);
-          })
-          .catch( (e) => {
-            console.log(e);
-          })
-      // удаление всех сообщений
-      messageModel.find({lobbyID}).remove().exec();
-
-
-  });
-
-  socket.on('deleteMessages', (lobbyID) => {
-    messageModel.find({lobbyID}).remove().exec();
-  });
-
-  socket.on('getQuestion', (gameInfo) => {
-
-    const places = ['parks', 'monuments', 'gardens', 'buidings'];
-    const countries = ['Russia',
-      'Australia',
-      'Austria',
-      'Azerbaijan',
-      'Anguilla',
-      'Argentina',
-      'Armenia',
-      'Arulco',
-      'Belarus',
-      'Belize',
-      'Belgium',
-      'Bermuda',
-      'Bulgaria',
-      'Brazil',
-      'Great+Britain',
-      'Hungary',
-      'Vietnam',
-      'Haiti',
-      'Guadeloupe',
-      'Germany',
-      'Holland',
-      'Honduras',
-      'Hong+Kong',
-      'Greece',
-      'Georgia',
-      'Denmark',
-      'Dominican+Republic',
-      'Egypt',
-      'Israel',
-      'India',
-      'Indonesia',
-      'Jordan',
-      'Iraq',
-      'Iran',
-      'Ireland',
-      'Spain',
-      'Italy',
-      'Kazakhstan',
-      'Cameroon',
-      'Canada',
-      'Caribbean',
-      'Cyprus',
-      'Kirghizstan',
-      'China',
-      'Korea',
-      'Costa+Rica',
-      'Cuba',
-      'Kuwait',
-      'Latvia',
-      'Lebanon',
-      'Lebanon',
-      'Libya',
-      'Lithuania',
-      'Luxembourg',
-      'Macedonia',
-      'Malaysia',
-      'Malta',
-      'Mexico',
-      'Mozambique',
-      'Moldova',
-      'Monaco',
-      'Mongolia',
-      'Morocco',
-      'Netherlands',
-      'New+Zealand',
-      'Norway',
-      'Isle+Of+Man',
-      'Pakistan',
-      'Peru',
-      'Poland',
-      'Portugal',
-      'Reunion',
-      'Romania',
-      'USA',
-      'El+Salvador',
-      'Singapore',
-      'Syria',
-      'Slovakia',
-      'Slovenia',
-      'Suriname',
-      'Tajikistan',
-      'Taiwan',
-      'Thailand',
-      'Tunisia',
-      'Turkmenistan',
-      'Turkmenistan',
-      'Turks+and+Caicos',
-      'Turkey',
-      'Uganda',
-      'Uzbekistan',
-      'Ukraine',
-      'Finland',
-      'France',
-      'Croatia',
-      'Czech',
-      'Chile',
-      'Switzerland',
-      'Sweden',
-      'Ecuador',
-      'Estonia',
-      'South+Africa',
-      'Yugoslavia',
-      'South+Korea',
-      'Jamaica',
-      'Japan'];
-
-    const getImage = () => {
-      const randPlace = places[Math.floor(Math.random() * places.length)];
-      const randCountry = countries[Math.floor(Math.random() * countries.length)];
-      const queryString = `${randPlace}+in+${randCountry}`;
-      const options = {
-        host: 'maps.googleapis.com',
-        path: `/maps/api/place/textsearch/json?query=${queryString}&key=AIzaSyDOSq_kn0L-hgthgdNbywIpAaHcyZo51RM`
-      };
-      const req = https.get(options, function(res) {
-        let bodyChunks = [];
-        res.on('data', (chunk)  => {
-
-          bodyChunks.push(chunk);
-        }).on('end', () => {
-          let body = Buffer.concat(bodyChunks);
-          const parsedBody = JSON.parse(body);
-          const results = parsedBody.results;
-          try {
-            const randomResult = results[Math.floor(Math.random() * results.length)];
-            const photos = randomResult.photos;
-            const location = randomResult.geometry.location;
-
-            // result
-
-
-            const namePlace = `${randomResult.name} in ${randCountry}`;
-
-            const photo = photos[0];
-            const photoReference = photo.photo_reference;
-
-
-
-            https.get({
-              host: 'maps.googleapis.com',
-              path: `/maps/api/place/photo?maxwidth=540&photoreference=${photoReference}&key=AIzaSyDOSq_kn0L-hgthgdNbywIpAaHcyZo51RM`
-            }, (res) => {
-
-              var imageChunks = '';
-              res.on('data', (chunk) => {
-                imageChunks += chunk;
-              }).on('end', () => {
-
-                let regexp = /"https.*"/;
-                const photoURL = imageChunks.match(regexp)[0].split('"')[1];
-
-                socket.emit('question', {
-                  photoURL,
-                  answer: location,
-                  numQuestion : gameInfo.numQuestion,
-                  namePlace
+                                socket.emit('onQuestion', {
+                                    photoURL,
+                                    answer: {
+                                        location,
+                                        correctCountry: countriesRus[randCountryNum]
+                                    },
+                                    variants: randCountries
+                                });
+                            });
+                        });
+                    } catch (err) {
+                        getImage();
+                    }
                 });
-              });
             });
-          } catch (err) {
-            getImage();
-          }
-        });
-      });
-    };
+        };
 
-    getImage();
-  });
+        getImage();
+    });
 
-  socket.on('sendQuestionToOthers', (gameInfo) => {
-    socket.to(gameInfo.lobbyID).emit('question', gameInfo.question);
-  });
-
-  socket.on('answer', (gameInfo) => {
-
-    // оценка ответа
     function distance(lat1, lon1, lat2, lon2) {
-      let p = 0.017453292519943295;    // Math.PI / 180
-      let c = Math.cos;
-      let a = 0.5 - c((lat2 - lat1) * p)/2 +
-        c(lat1 * p) * c(lat2 * p) *
-        (1 - c((lon2 - lon1) * p))/2;
-
-      return 12742 * Math.asin(Math.sqrt(a)); // 2 * R; R = 6371 km
+        let p = 0.017453292519943295;    // Math.PI / 180
+        let c = Math.cos;
+        let a = 0.5 - c((lat2 - lat1) * p)/2 +
+            c(lat1 * p) * c(lat2 * p) *
+            (1 - c((lon2 - lon1) * p))/2;
+        return 12742 * Math.asin(Math.sqrt(a));
     }
 
-    const x = distance(gameInfo.question.answer.lat,
-                       gameInfo.question.answer.lng,
-                       gameInfo.answer.lat,
-                       gameInfo.answer.lng);
+    socket.on('answer', (gameInfo) => {
+        console.log(gameInfo);
+        let result;
+        if(gameInfo.typeAnswer){
+            const x = distance(
+                gameInfo.question.answer.location.lat,
+                gameInfo.question.answer.location.lng,
+                gameInfo.answerUser.lat,
+                gameInfo.answerUser.lng);
+            if (x > 10000) {
+                result = 0;
+            } else {
+                result = Math.ceil(Math.pow((x - 12000), 2) * 5 * Math.pow(10, -6));
+            }
+        } else {
+            result = gameInfo.answerUser === gameInfo.question.answer.correctCountry ? 100 : 0;
+        }
 
-    let result;
-    if (x > 10000) {
-      result = 0;
-    } else {
-      result = Math.ceil(Math.pow((x - 12000), 2) * 5 * Math.pow(10, -6));
-    }
-
-    // другим емит, количество баллов
-    socket.to(gameInfo.lobbyID).emit('userAnswered', {
-      userID: gameInfo.userID,
-      result: result
+        socket.emit('resultAnswer', {
+            result
+        });
     });
 
-    socket.emit('userAnswered', {
-      userID: gameInfo.userID,
-      result: result
+
+
+    socket.on('gameFinished', (gameInfo) => {
+        LobbyModel.findOne({lobbyID: gameInfo.lobbyID})
+            .then( (lobby) => {
+                try{
+                    lobby.status = 'finished';
+                    lobby.save()
+                        .then()
+                        .catch()
+                } catch (e) {
+
+                }
+            })
+            .catch()
+
+
     });
-  });
-
-  socket.on('gameFinished', (gameInfo) => {
-      LobbyModel.findOne({lobbyID: gameInfo.lobbyID})
-          .then( (lobby) => {
-              try{
-                lobby.status = 'finished';
-                lobby.save()
-                    .then()
-                    .catch()
-              } catch (e) {
-
-              }
-          })
-          .catch()
-
-
-  });
 
 
 

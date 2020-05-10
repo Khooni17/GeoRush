@@ -1,81 +1,135 @@
 <template>
     <div class="container">
-      <button class="start_play">Играть!</button>
-      <div class="head"></div>
-      <chat class="chat"></chat>
+        <div class="left">
+            <h1>Попробуйте угадать, где была сделана фотография!</h1>
+            <img src="src/img/start.jpg" alt="">
+        </div>
+        <div class="right">
+            <a
+                    @click="play"
+                    href="" style="position: absolute;
+                    top: 45%;
+                    left: 70%;">Играть!</a>
+        </div>
     </div>
 </template>
 
 <script>
-  import chat from './chat';
 
     export default {
-      name: "StartComponent",
-      data(){
-        return {
-          login : 'w'
+        name: "StartComponent",
+        data() {
+            return {
+            }
+        },
+        methods: {
+            play(){
+                this.$router.push('/game')
+            }
         }
-      },
-      components:{
-        chat
-      }
     }
 </script>
 
 <style lang="scss" scoped>
-  $black : #000;
-  $gray : #202020a8;
 
-  .container {
-    height: 100vh;
-    width: 100vw;
-    padding: 0;
-    margin: 0;
-    background-color: $black;
-    -moz-user-select: none;
-    -khtml-user-select: none;
-    user-select: none;
+    .container {
+        user-select: none;
+        height: 100vh;
+        width: 100vw;
+        padding: 0;
+        margin: 0;
+        display: flex;
 
-    .start_play {
-      position: absolute;
-      z-index: 110;
-      left: 13%;
-      top: 45%;
-      cursor: pointer;
-      padding: 27px 50px;
-      background-color: #00caca;
-      border: none;
-      border-radius: 15px;
-      color: #dddddd;
-      font-size: 1.4em;
-      text-shadow: #000 1px 1px;
-      clip-path: polygon(26% 19%, 27% 19%, 100% 48%, 0 73%);
 
-      &:hover {
-        background-color: aqua;
-      }
 
-      &:focus {
-        outline: none !important;
-      }
+        .left {
+            width: 50%;
+            background: white;
+            height: 100%;
 
-      &:active{
-        border: none;
-        transform: scale(0.97);
-      }
+            H1 {
+                text-align: right;
+                font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;
+                font-size: 2.5em;
+                width: 44vw;
+                position: absolute;
+                left: 5vw;
+                top: 10%;
+                z-index: 100;
+                transform: translateZ(-100px);
+                text-shadow: -1px -1px #464141,
+                -2px -2px #464141,
+                -1px 1px #464141,
+                -2px 2px #464141,
+                1px 1px #464141,
+                2px 2px #464141,
+                1px -1px #464141,
+                2px -2px #464141,
+                -3px -3px 2px #BBB,
+                -3px 3px 2px #BBB,
+                3px 3px 2px #BBB,
+                3px -3px 2px #BBB;
+                color: #fff;
+                user-select: none;
+                transition: all 1s;
+            }
+            H1:hover {
+                color: yellowgreen;
+            }
+
+            img {
+                z-index: 1;
+                width: 100vw;
+                height: 100vh;
+                position: absolute;
+                left: 0;
+                top: 0;
+                opacity: .45;
+            }
+
+
+        }
+
+        .right {
+            height: 100%;
+            width: 70%;
+            a {
+                z-index: 10;
+                text-decoration: none;
+                outline: none;
+                font-weight: 800;
+                display: inline-block;
+                padding: 15px 70px;
+                margin: 10px 20px;
+                position: relative;
+                overflow: hidden;
+                border: 2px solid white;
+                border-radius: 8px;
+                font-family: 'Montserrat', sans-serif;
+                color: white;
+                transition: .2s ease-in-out;
+            }
+            a:before {
+                content: "";
+                background: linear-gradient(90deg, rgba(255,255,255,.1), rgba(255,255,255,.5));
+                height: 50px;
+                width: 50px;
+                position: absolute;
+                top: -8px;
+                left: -75px;
+                transform: skewX(-45deg);
+            }
+            a:hover {
+                background: #44a51a;
+                color: #fff;
+                border: 2px solid #ffffff;
+                box-shadow: -3px 3px 3px #0e0e0e;
+            }
+            a:hover:before {
+                left: 150px;
+                transition: 2s ease-in-out;
+            }
+
+        }
     }
-
-    .head {
-      height: 100%;
-      background-color: $gray;
-      clip-path: polygon(50% 0%, 100% 0, 100% 54%, 17% 39%, 0 61%, 0 0);
-    }
-
-    .chat {
-      position: absolute;
-      top: 20%;
-      right: 5%;
-
-    }
-  }
 </style>
