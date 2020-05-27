@@ -111,7 +111,7 @@
                 question: {},
                 variants: [],
                 showCart : true,
-                currentQuestion: 9,
+                currentQuestion: 0,
                 answerUser: '',
                 totalPoints: 0,
                 gameFinished: false,

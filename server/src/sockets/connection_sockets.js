@@ -256,6 +256,8 @@ module.exports = (io, socket) => {
             "Jamaica",
             "Japan"
         ];
+        var db, photoURL, randCountries = [];
+
 
         const getImage = () => {
             const randPlace = places[Math.floor(Math.random() * places.length)];
@@ -292,9 +294,8 @@ module.exports = (io, socket) => {
                             }).on('end', () => {
 
                                 let regexp = /"https.*"/;
-                                const photoURL = imageChunks.match(regexp)[0].split('"')[1];
+                                photoURL = imageChunks.match(regexp)[0].split('"')[1];
 
-                                let randCountries = [];
                                 randCountries.push(countriesRus[Math.floor(Math.random() * countries.length)]);
                                 randCountries.push(countriesRus[Math.floor(Math.random() * countries.length)]);
                                 randCountries.push(countriesRus[Math.floor(Math.random() * countries.length)]);
@@ -304,14 +305,40 @@ module.exports = (io, socket) => {
                                     return Math.random() - 0.5;
                                 })
 
-                                socket.emit('onQuestion', {
-                                    photoURL,
-                                    answer: {
-                                        location,
-                                        correctCountry: countriesRus[randCountryNum]
-                                    },
-                                    variants: randCountries
+                                MongoClient.connect('mongodb://localhost:27017/geoRush', function(err,database) {
+                                    if(err){
+                                        return console.log(err)
+                                    }
+                                    db = database;
+                                    db.collection('photos').insert({
+                                        'protoUrl' : photoURL,
+                                        answer: {
+                                            location,
+                                            correctCountry: countriesRus[randCountryNum]
+                                        }}, (err, result)=> {
+                                        if(err){
+                                            return console.log(err);
+                                        }
+                                        db.collection('photos').find().toArray(function(err,docs) {
+                                            if(err){
+                                                return console.log(err);
+                                            }
+                                            console.log(docs[0]);
+                                            socket.emit('onQuestion', {
+                                                photoURL,
+                                                answer: {
+                                                    location,
+                                                    correctCountry: countriesRus[randCountryNum]
+                                                },
+                                                'variants': randCountries
+                                            });
+                                            //socket.emit('saved', docs);
+                                        })
+                                    })
                                 });
+
+
+
                             });
                         });
                     } catch (err) {
