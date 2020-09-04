@@ -20,7 +20,7 @@
     "joi": "^13.6.0",
     "jsonwebtoken": "^8.3.0",
     "lodash": "^4.17.10",
-    "mongodb": "^2.2.33",
+    "mongodb": "^3.1.13",
     "mongoose": "^5.2.7",
     "mongoose-bcrypt": "^1.5.1",
     "mongoose-bcrypt-compare": "^0.1.4",
